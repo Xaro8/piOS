@@ -4,6 +4,8 @@
 #include <libk/kmalloc.h>
 #include <libk/list.h>
 #include <libk/assert.h>
+#include <irq/timer.h>
+#include <proc/signal.h>
 #include <proc/virtual.h>
 
 /*
@@ -59,6 +61,12 @@ void sched_pick_next() {
 
         // check if valid to run
         struct proc* lproc = (struct proc*)last_element->val;
+
+        if(lproc->alarm_ticks && (unsigned int)lproc->alarm_ticks <= (unsigned int)sys_ticks) {
+            struct signal alarm_sig = {SIG_TYPE_ALARM, (unsigned int) lproc->alarm_ticks};
+            signal_send(lproc, &alarm_sig);
+            lproc->alarm_ticks = 0;
+        }
 
         // this process is valid to run
         if(lproc->state == PROC_STATE_RUNNABLE || lproc->state == PROC_STATE_SYSCALL)
@@ -124,6 +132,10 @@ int make_kernel_thread(char* name, void __attribute__((noreturn)) (*entry)()) {
     // thread is ready to execute now
     p->state = PROC_STATE_RUNNABLE;
 
+    list_init(&p->signal_queue); // not supported
+    semaphore_init(&p->signal_sema);
+    p->sighandler = NULL;
+
     strcpy(p->name, name);
 
     list_append(&proc_list, p);
@@ -159,6 +171,10 @@ struct proc* sched_init_user_thread() {
 
     p->state = PROC_STATE_UNLOADED;
     p->name[0] = '\0';
+
+    list_init(&p->signal_queue);
+    semaphore_init(&p->signal_sema);
+    p->signals_hold = 0;
 
     list_append(&proc_list, p);
     return p;

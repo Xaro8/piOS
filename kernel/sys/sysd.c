@@ -4,10 +4,14 @@
 
 #include <driver/tty.h>
 #include <proc/sched.h>
+#include <proc/signal.h>
 #include <proc/virtual.h>
 #include <fs/vfs.h>
 #include <fs/vfs_async.h>
+#include <irq/timer.h>
 
+#include <libk/kmalloc.h>
+#include <libk/assert.h>
 #include <libk/con/blockq.h>
 #include <libk/log.h>
 #include <libk/kmalloc.h>
@@ -178,6 +182,57 @@ int process_syscall(struct proc_state* state) {
             current_proc->syscall_state.mem_pages[state->regs[1]] = first_free_page++;
             state->regs[0] = 0;
             break;
+        }
+        case SYS_SIGACTION: {
+            state->regs[0] = (unsigned) current_proc->sighandler;
+            current_proc->sighandler = (void*)state->regs[1];
+            break;
+        }
+        case SYS_SIGSEND: {
+            struct proc* target = current_proc;
+            if ((int) state->regs[1] >= 0) {
+                target = proc_by_pid(state->regs[1]);
+                if (!target) {
+                    state->regs[0] = -EINVAL;
+                    break;
+                }
+            } 
+            // todo: queue lock
+            struct signal signal = {
+                state->regs[2],
+                state->regs[3]
+            };
+            signal_send(target, &signal);
+            break;
+        }
+        case SYS_SIGHDLRRET: {
+            signal_handler_return(current_proc);
+            break;
+        }
+        case SYS_SIGWAIT: {
+            if (current_proc->sighandler && !current_proc->signals_hold) {
+                state->regs[0] = -EINVAL;
+                break;
+            }
+            semaphore_down(&current_proc->signal_sema);
+            ASSERT(current_proc->signal_queue.first);
+            memcpy_to_userspace(current_proc, state->regs[1], current_proc->signal_queue.first->val, sizeof(struct signal));
+            kfree(current_proc->signal_queue.first->val);
+            list_remove(&current_proc->signal_queue, current_proc->signal_queue.first);
+            state->regs[0] = 0;
+            break;
+        }
+        case SYS_CLOCKTICKS: {
+            // TODO: atomic, or check if high changed in this case
+            state->regs[0] = (unsigned int) sys_ticks;
+            state->regs[1] = (unsigned int) (sys_ticks << 16u);
+            break;
+        }
+        case SYS_ALARMSET: {
+            unsigned long alarm_val = ((unsigned long) state->regs[2] << 16u) | (unsigned long) state->regs[1];
+            // TODO: atomic set
+            current_proc->alarm_ticks = alarm_val;
+            break; 
         }
         default: {
             log("PID: %d Illegal syscall (%d)", current_proc->pid, sysno);

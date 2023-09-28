@@ -3,6 +3,7 @@
 
 #include <libk/types.h>
 #include <libk/con/semaphore.h>
+#include <libk/list.h>
 
 #define PROC_MAX_FILES 16
 
@@ -44,7 +45,14 @@ struct proc {
     // blocking support
     struct semaphore* sema_blocked;
 
+    // signals
+    struct list signal_queue;
+    int signals_hold;
+    void* sighandler;
+    struct semaphore signal_sema;
+
     void* load_brk;
+    unsigned long alarm_ticks;
 };
 
 #define PROC_STATE_UNLOADED 0

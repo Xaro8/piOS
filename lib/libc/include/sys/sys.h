@@ -16,5 +16,11 @@ int sys_write(int fd, const void* buff, size_t size);
 int sys_fcntl(int fd, unsigned flags);
 int sys_procinfo(unsigned pid, struct sys_proc_info* proc_info);
 int sys_pgmap(int page);
+int sys_sigsend(int pid, unsigned type, unsigned number);
+void* sys_sigaction(void (*handler)(struct signal*, int async));
+#define sys_sighdlasyncret() __asm__ volatile ("ldi r0, 14\nsys");
+int sys_sigwait(struct signal* result);
+void sys_clockticks(unsigned long* time);
+void sys_alarmset(unsigned long ticks);
 
 #endif

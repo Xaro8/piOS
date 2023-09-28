@@ -25,6 +25,7 @@ SOURCES=\
 	fs/rootfs.c \
 	fs/sio.c \
 	fs/tar.c \
+	fs/tmp.c \
 	fs/vfs.c \
 	fs/vfs_async.c \
 	irq/interrupt.c \
@@ -44,6 +45,7 @@ SOURCES=\
 	proc/cswitch.S \
 	proc/elf.c \
 	proc/sched.c \
+	proc/signal.c \
 	proc/virtual.c\
 	sys/sysd.c
 
